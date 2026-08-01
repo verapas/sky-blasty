@@ -1,0 +1,15 @@
+:global(html, body) {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0a0a1a;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: 'Courier New', monospace;
+}
+
+:global(#app) {
+  width: 100vw;
+  height: 100vh;
+}
