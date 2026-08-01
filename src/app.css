@@ -1,4 +1,4 @@
-:global(html, body) {
+html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -9,7 +9,7 @@
   font-family: 'Courier New', monospace;
 }
 
-:global(#app) {
+#app {
   width: 100vw;
   height: 100vh;
 }
