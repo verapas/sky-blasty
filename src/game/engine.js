@@ -1,4 +1,4 @@
-// Sky Shooter - Game Engine
+// Sky Blasty - Game Engine
 // Top-down mobile shooter built on HTML5 Canvas
 
 export class Game {
@@ -43,12 +43,28 @@ export class Game {
     this.shieldActive = false;
     this.shieldTimer = 0;
 
-    this.init();
-  }
+    // Input - bound handlers so we can remove them later
+    this._onTouchStart = (e) => this.handleTouch(e);
+    this._onTouchMove = (e) => this.handleTouch(e);
+    this._onTouchEnd = () => { this.touchActive = false; };
+    this._onMouseDown = (e) => this.handleMouse(e);
+    this._onMouseMove = (e) => { if (e.buttons) this.handleMouse(e); };
+    this._onMouseUp = () => { this.touchActive = false; };
+    this._onKeyDown = (e) => { this.keys[e.key.toLowerCase()] = true; this.useKeyboard = true; };
+    this._onKeyUp = (e) => { this.keys[e.key.toLowerCase()] = false; };
 
-  init() {
+    this.canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    this.canvas.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    this.canvas.addEventListener('touchend', this._onTouchEnd);
+    this.canvas.addEventListener('mousedown', this._onMouseDown);
+    this.canvas.addEventListener('mousemove', this._onMouseMove);
+    this.canvas.addEventListener('mouseup', this._onMouseUp);
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+
+    // Initial resize - use window dimensions as fallback
     this.resize();
-    this.createStars();
+
     this.player = {
       x: this.width / 2,
       y: this.height - 120,
@@ -58,26 +74,36 @@ export class Game {
       hitbox: 14,
     };
 
-    // Input
-    this.canvas.addEventListener('touchstart', (e) => this.handleTouch(e), { passive: false });
-    this.canvas.addEventListener('touchmove', (e) => this.handleTouch(e), { passive: false });
-    this.canvas.addEventListener('touchend', () => { this.touchActive = false; });
-    this.canvas.addEventListener('mousedown', (e) => this.handleMouse(e));
-    this.canvas.addEventListener('mousemove', (e) => { if (e.buttons) this.handleMouse(e); });
-    this.canvas.addEventListener('mouseup', () => { this.touchActive = false; });
-
-    window.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; this.useKeyboard = true; });
-    window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
+    this.createStars();
   }
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.ctx.scale(dpr, dpr);
-    this.width = rect.width;
-    this.height = rect.height;
+
+    // Fallback to window dimensions if canvas not yet laid out
+    const cssW = rect.width > 0 ? rect.width : window.innerWidth;
+    const cssH = rect.height > 0 ? rect.height : window.innerHeight;
+
+    this.canvas.width = cssW * dpr;
+    this.canvas.height = cssH * dpr;
+    this.canvas.style.width = cssW + 'px';
+    this.canvas.style.height = cssH + 'px';
+
+    // Reset transform and apply scale fresh each time
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    this.width = cssW;
+    this.height = cssH;
+
+    // Keep player in bounds after resize
+    if (this.player) {
+      this.player.x = Math.min(this.player.x, this.width - this.player.w / 2);
+      this.player.y = Math.min(this.player.y, this.height - this.player.h / 2);
+    }
+
+    // Recreate stars to fill new dimensions
+    if (this.stars.length > 0) this.createStars();
   }
 
   createStars() {
@@ -95,7 +121,6 @@ export class Game {
 
   handleTouch(e) {
     e.preventDefault();
-    if (this.gameState !== 'playing') return;
     const rect = this.canvas.getBoundingClientRect();
     const touch = e.touches[0];
     if (touch) {
@@ -107,7 +132,6 @@ export class Game {
   }
 
   handleMouse(e) {
-    if (this.gameState !== 'playing') return;
     const rect = this.canvas.getBoundingClientRect();
     this.touchX = e.clientX - rect.left;
     this.touchY = e.clientY - rect.top;
@@ -135,9 +159,7 @@ export class Game {
   }
 
   update(dt) {
-    if (this.gameState !== 'playing') return;
-
-    // Stars (always scroll)
+    // Stars scroll in all states (nice background for menu too)
     for (const s of this.stars) {
       s.y += s.speed * dt;
       if (s.y > this.height) {
@@ -146,8 +168,11 @@ export class Game {
       }
     }
 
-    // Player movement
+    if (this.gameState !== 'playing') return;
+
     const p = this.player;
+
+    // Player movement
     if (this.touchActive) {
       const dx = this.touchX - p.x;
       const dy = this.touchY - p.y;
@@ -193,7 +218,6 @@ export class Game {
         this.enemyBullets.splice(i, 1);
         continue;
       }
-      // Hit player
       const dx = b.x - p.x;
       const dy = b.y - p.y;
       if (Math.sqrt(dx * dx + dy * dy) < p.hitbox + b.r) {
@@ -220,16 +244,15 @@ export class Game {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const en = this.enemies[i];
       en.y += en.vy * dt;
-      en.x += Math.sin(en.y * 0.01 + en.phase) * en.sway;
+      en.x += Math.sin(en.y * 0.01 + en.phase) * en.sway * dt;
 
-      // Enemy shoots
       if (en.canShoot) {
         en.fireTimer += dt * 1000;
         if (en.fireTimer >= en.fireInterval) {
           en.fireTimer = 0;
           const adx = p.x - en.x;
           const ady = p.y - en.y;
-          const adist = Math.sqrt(adx * adx + ady * ady);
+          const adist = Math.sqrt(adx * adx + ady * ady) || 1;
           const bspeed = 200;
           this.enemyBullets.push({
             x: en.x,
@@ -242,13 +265,12 @@ export class Game {
         }
       }
 
-      // Off screen
       if (en.y > this.height + 50) {
         this.enemies.splice(i, 1);
         continue;
       }
 
-      // Collision with player bullet
+      // Bullet collision
       for (let j = this.bullets.length - 1; j >= 0; j--) {
         const b = this.bullets[j];
         const dx = b.x - en.x;
@@ -267,7 +289,7 @@ export class Game {
         }
       }
 
-      // Collision with player body
+      // Body collision
       if (en.y > 0) {
         const dx = en.x - p.x;
         const dy = en.y - p.y;
@@ -279,7 +301,7 @@ export class Game {
       }
     }
 
-    // Update powerups
+    // Powerups
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const pu = this.powerups[i];
       pu.y += pu.vy * dt;
@@ -350,6 +372,7 @@ export class Game {
     const t = { ...types[idx] };
     this.enemies.push({
       ...t,
+      maxHp: t.hp,
       x: Math.random() * (this.width - 60) + 30,
       y: -30,
       phase: Math.random() * Math.PI * 2,
@@ -396,7 +419,6 @@ export class Game {
       if (this.score > this.highScore) this.highScore = this.score;
       if (this.callbacks.onGameOver) this.callbacks.onGameOver(this.score);
     } else {
-      // Brief invulnerability
       this.shieldActive = true;
       this.shieldTimer = 1500;
       this.weaponLevel = Math.max(1, this.weaponLevel - 1);
@@ -443,7 +465,7 @@ export class Game {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    // Stars
+    // Stars (always render, even in menu)
     for (const s of this.stars) {
       ctx.globalAlpha = s.alpha;
       ctx.fillStyle = '#fff';
@@ -451,7 +473,10 @@ export class Game {
     }
     ctx.globalAlpha = 1;
 
-    if (this.gameState === 'menu' || this.gameState === 'gameover') return;
+    if (this.gameState === 'menu' || this.gameState === 'gameover') {
+      // Still render stars for nice animated background behind the menu overlay
+      return;
+    }
 
     // Bullets
     for (const b of this.bullets) {
@@ -479,10 +504,8 @@ export class Game {
       ctx.shadowBlur = 6;
       ctx.shadowColor = en.color;
 
-      // Draw as triangle/diamond shape
       ctx.beginPath();
       if (en.canShoot) {
-        // Tougher enemy - hexagon
         const r = en.w / 2;
         for (let i = 0; i < 6; i++) {
           const a = (Math.PI / 3) * i + Math.PI / 6;
@@ -492,7 +515,6 @@ export class Game {
           else ctx.lineTo(px, py);
         }
       } else {
-        // Basic enemy - inverted triangle
         ctx.moveTo(en.x, en.y + en.h / 2);
         ctx.lineTo(en.x - en.w / 2, en.y - en.h / 2);
         ctx.lineTo(en.x + en.w / 2, en.y - en.h / 2);
@@ -500,13 +522,12 @@ export class Game {
       ctx.closePath();
       ctx.fill();
 
-      // HP bar for tough enemies
       if (en.hp > 1 && en.hp < en.maxHp) {
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#333';
         ctx.fillRect(en.x - 15, en.y - en.h / 2 - 8, 30, 4);
         ctx.fillStyle = '#0f0';
-        ctx.fillRect(en.x - 15, en.y - en.h / 2 - 8, 30 * (en.hp / (en.maxHp || en.hp)), 4);
+        ctx.fillRect(en.x - 15, en.y - en.h / 2 - 8, 30 * (en.hp / en.maxHp), 4);
       }
     }
     ctx.shadowBlur = 0;
@@ -543,7 +564,6 @@ export class Game {
     ctx.save();
     ctx.translate(p.x, p.y);
 
-    // Shield effect
     if (this.shieldActive) {
       ctx.strokeStyle = `rgba(80,200,255,${0.4 + Math.sin(Date.now() / 100) * 0.2})`;
       ctx.lineWidth = 2;
@@ -552,28 +572,25 @@ export class Game {
       ctx.stroke();
     }
 
-    // Player ship
     ctx.fillStyle = '#4af';
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#4af';
     ctx.beginPath();
-    ctx.moveTo(0, -p.h / 2);       // Nose
-    ctx.lineTo(-p.w / 2, p.h / 2);  // Left wing
+    ctx.moveTo(0, -p.h / 2);
+    ctx.lineTo(-p.w / 2, p.h / 2);
     ctx.lineTo(-p.w / 4, p.h / 3);
-    ctx.lineTo(0, p.h / 2);         // Tail center
+    ctx.lineTo(0, p.h / 2);
     ctx.lineTo(p.w / 4, p.h / 3);
-    ctx.lineTo(p.w / 2, p.h / 2);   // Right wing
+    ctx.lineTo(p.w / 2, p.h / 2);
     ctx.closePath();
     ctx.fill();
 
-    // Cockpit
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#0df';
     ctx.beginPath();
     ctx.arc(0, -p.h / 6, 5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Engine glow
     ctx.fillStyle = `rgba(255,150,0,${0.5 + Math.random() * 0.3})`;
     ctx.fillRect(-4, p.h / 2 - 2, 8, 6);
 

@@ -60,7 +60,7 @@
     <div class="overlay">
       {#if gameState === 'menu'}
         <div class="menu">
-          <h1>🚀 SKY SHOOTER</h1>
+          <h1>🚀 SKY BLASTY</h1>
           <p class="subtitle">Top-Down Arcade Shooter</p>
           <button on:click={startGame}>SPIELEN</button>
           <div class="instructions">
@@ -105,28 +105,18 @@
 </main>
 
 <style>
-  :global(html, body) {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #0a0a1a;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
-    font-family: 'Courier New', monospace;
-  }
-
   .game-container {
     position: fixed;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
   }
 
   canvas {
-    width: 100vw;
-    height: 100vh;
     display: block;
     touch-action: none;
   }
